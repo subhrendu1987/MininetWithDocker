@@ -1,6 +1,71 @@
 #!/usr/bin/python
+import argparse
+import json
+import docker
+##################################################################
+def create_container(image_name, container_name):
+    client = docker.from_env()
+    container = client.containers.run(image_name, detach=True, name=container_name, command="sleep infinity")
+    print(f"Container {container_name} created with ID: {container.id}")
+##################################################################
+def getSwitches(data):
+    for sw in data['switches']:
+        create_container("ubuntu:latest", "mn_"+sw['opts']['hostname'])
+##################################################################
+def getJSON(filename):
+    # Read the .mn/.JSON file
+    try:
+        with open(filename, "r") as file:
+            data = json.load(file)
+            #print("Content of the JSON file:")
+            #print(data)
+    except FileNotFoundError:
+        print("Error: File not found.")
+        return(None)
+    except json.JSONDecodeError:
+        print("Error: Invalid JSON format in the file.")
+        return(None)
+    return(data)
+##################################################################
+def getTopology(): 
+    data=getJSON(filename=args.topology)
+    #Nodes=
+##################################################################
+def getDockerImages(): 
+   client = docker.from_env() 
+   images = client.images.list() 
+   return images 
+##################################################################
+def kill_and_remove_container(cname):
+    client = docker.from_env()
+    container = client.containers.get(cname)
+    if container:
+        container.kill()  # Stop the container
+        container.remove()  # Remove the container
+        print(f"Container '{cname}' killed and removed.")
+    else:
+        print(f"Container '{cname}' not found.")
+##################################################################
+def cleanup(): 
+   client = docker.from_env()
+   containers = client.containers.list()
+   matching_containers = [container.name for container in containers if container.name.startswith(prefix)]
+   for cname in matching_containers:
+        kill_and_remove_container(cname)
+##################################################################
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Mininet with Dockers instead of Network Namespace")
+    parser.add_argument("topology", help="Topology file (i.e. .mn) generated from miniedit.")
+    parser.add_argument("dockerMap", help="Docker mapping JSON for each nodes")
+    args = parser.parse_args()
+    # args = argparse.Namespace(topology="minieditBaseline.mn",dockerMap="") ## Ipython stub
+    ##################################################################
+    data=getJSON(filename=args.topology)
+    Nodes=
 
 
+
+"""
 function start_docker_containers
     set container_names "c1" "r1" "c2" "c3" "c4" "r2"
     for name in $container_names
@@ -111,3 +176,4 @@ function main
 end
 
 main
+"""

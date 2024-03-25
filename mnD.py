@@ -8,26 +8,23 @@ Topology={}
 ##################################################################
 def createLink(c1,c2):
     # Use ip command to create a veth pair
-    #ip link add 'h1-eth0' type veth peer name 's1-eth0'
+    #h1_id=$(docker ps --format '{{.ID}}' --filter name=h1)
     intf1=f"{c1}-{c2}-eth"
     intf2=f"{c2}-{c1}-eth"
+    #ip link add 'intf1' type veth peer name 'intf2'
     subprocess.run(["ip", "link", "add", intf1, "type", "veth", "peer", "name", intf2])
     cid1=Topology[c1]['cid']
     cid2=Topology[c2]['cid']
 
-    #ip link set intf1 netns c1
+    #ip link set 'intf1' netns 'cid1'
     subprocess.run(["ip", "link", "set", intf1,"netns",cid1])
 ##################################################################
 def deleteLink(c1,c2):
     intf1=f"{c1}-{c2}-eth"
     intf2=f"{c2}-{c1}-eth"
     # Create veth pair
-    #h1_id=$(docker ps --format '{{.ID}}' --filter name=h1)
-
+    
     subprocess.run(["ip", "link", "delete", intf1])
-    
-    
-    
 ##################################################################
 def getParams(container_name):
     client = docker.from_env()
@@ -35,6 +32,7 @@ def getParams(container_name):
     network_settings = container.attrs['NetworkSettings']
     ns_id = network_settings['Networks']['none']['NetworkID']
     pid = container.attrs['State']['Pid']
+    #cid=$(docker ps --format '{{.ID}}' --filter name='container_name')
     cid= container.id
     return({'ns_id':ns_id,'pid':pid,'cid':cid})
 ##################################################################
@@ -57,16 +55,17 @@ def createLinks(data):
 def createMiddleboxes(data):
     for sw in data['switches']:
         name="mn_"+sw['opts']['hostname']
+        Topology[name]={}
         if sw['opts']['switchType'] == "legacySwitch":
-            print("Legecy Switch Created:")
+            print("Legacy Switch Created:")
             print(sw['opts'])
             c=createNode("mnbase:latest", name)
             Topology[name]['switchType']="legacySwitch"
             #createBlankBridge()
         elif sw['opts']['switchType'] == "legacyRouter":
-            print("Legecy Router Created:")
+            print("Legacy Router Created:")
             print(sw['opts'])
-            c=create_container("mnbase:latest", name)
+            c=createNode("mnbase:latest", name)
             Topology[name]['switchType']="legacyRouter"
             execDocker(name,"sysctl -w net.ipv4.ip_forward=1")
         else:

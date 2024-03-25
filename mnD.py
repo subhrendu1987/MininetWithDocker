@@ -38,10 +38,14 @@ def getParams(container_name):
     cid= container.id
     return({'ns_id':ns_id,'pid':pid,'cid':cid})
 ##################################################################
-def create_container(image_name, container_name):
+def createNode(image_name, container_name):
     client = docker.from_env()
     container = client.containers.run(image_name, detach=True, name=container_name, command="sleep infinity",network_mode="none")
     print(f"Container {container_name} created with ID: {container.id}")
+    params=getParams(name)
+    Topology[name]={'switchType':None,**params}
+    #ln -sfT /proc/$h1_pid/ns/net /var/run/netns/$h1_id
+    subprocess.run(["ln", "-sfT", f"/proc/{params[pid]}/ns/net", f"/var/run/netns/{params.cid}"])
     return
 ##################################################################
 def createLinks(data):
@@ -53,23 +57,18 @@ def createLinks(data):
 def createMiddleboxes(data):
     for sw in data['switches']:
         name="mn_"+sw['opts']['hostname']
-
         if sw['opts']['switchType'] == "legacySwitch":
             print("Legecy Switch Created:")
             print(sw['opts'])
-            c=create_container("mnbase:latest", name)
-            params=getParams(name)
-            Topology[name]={'switchType':"legacySwitch",**params}
+            c=createNode("mnbase:latest", name)
+            Topology[name]['switchType']="legacySwitch"
             #createBlankBridge()
         elif sw['opts']['switchType'] == "legacyRouter":
             print("Legecy Router Created:")
             print(sw['opts'])
             c=create_container("mnbase:latest", name)
+            Topology[name]['switchType']="legacyRouter"
             execDocker(name,"sysctl -w net.ipv4.ip_forward=1")
-            Topology[name]={'switchType':"legacyRouter"}
-            params=getParams(name)
-            Topology[name]={'switchType':"legacySwitch",**params}
-            ln -sfT /proc/$h1_pid/ns/net /var/run/netns/$h1_id
         else:
             print(f"Unknown Type: Therefore {name} Not created.")
     return

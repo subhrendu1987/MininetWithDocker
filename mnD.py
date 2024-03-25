@@ -2,15 +2,77 @@
 import argparse
 import json
 import docker
+import subprocess
+##################################################################
+Topology={}
+##################################################################
+def createLink(c1,c2):
+    # Use ip command to create a veth pair
+    #ip link add 'h1-eth0' type veth peer name 's1-eth0'
+    intf1=f"{c1}-{c2}-eth"
+    intf2=f"{c2}-{c1}-eth"
+    subprocess.run(["ip", "link", "add", intf1, "type", "veth", "peer", "name", intf2])
+    cid1=Topology[c1]['cid']
+    cid2=Topology[c2]['cid']
+
+    #ip link set intf1 netns c1
+    subprocess.run(["ip", "link", "set", intf1,"netns",cid1])
+##################################################################
+def deleteLink(c1,c2):
+    intf1=f"{c1}-{c2}-eth"
+    intf2=f"{c2}-{c1}-eth"
+    # Create veth pair
+    #h1_id=$(docker ps --format '{{.ID}}' --filter name=h1)
+
+    subprocess.run(["ip", "link", "delete", intf1])
+    
+    
+    
+##################################################################
+def getParams(container_name):
+    client = docker.from_env()
+    container = client.containers.get(container_name)
+    network_settings = container.attrs['NetworkSettings']
+    ns_id = network_settings['Networks']['none']['NetworkID']
+    pid = container.attrs['State']['Pid']
+    cid= container.id
+    return({'ns_id':ns_id,'pid':pid,'cid':cid})
 ##################################################################
 def create_container(image_name, container_name):
     client = docker.from_env()
-    container = client.containers.run(image_name, detach=True, name=container_name, command="sleep infinity")
+    container = client.containers.run(image_name, detach=True, name=container_name, command="sleep infinity",network_mode="none")
     print(f"Container {container_name} created with ID: {container.id}")
+    return
 ##################################################################
-def getSwitches(data):
+def createLinks(data):
+    for l in data['links']:
+        c1=f"mn_{l['src']}"
+        c2=f"mn_{l['dest']}"
+        createLink(c1,c2)
+##################################################################
+def createMiddleboxes(data):
     for sw in data['switches']:
-        create_container("ubuntu:latest", "mn_"+sw['opts']['hostname'])
+        name="mn_"+sw['opts']['hostname']
+
+        if sw['opts']['switchType'] == "legacySwitch":
+            print("Legecy Switch Created:")
+            print(sw['opts'])
+            c=create_container("mnbase:latest", name)
+            params=getParams(name)
+            Topology[name]={'switchType':"legacySwitch",**params}
+            #createBlankBridge()
+        elif sw['opts']['switchType'] == "legacyRouter":
+            print("Legecy Router Created:")
+            print(sw['opts'])
+            c=create_container("mnbase:latest", name)
+            execDocker(name,"sysctl -w net.ipv4.ip_forward=1")
+            Topology[name]={'switchType':"legacyRouter"}
+            params=getParams(name)
+            Topology[name]={'switchType':"legacySwitch",**params}
+            ln -sfT /proc/$h1_pid/ns/net /var/run/netns/$h1_id
+        else:
+            print(f"Unknown Type: Therefore {name} Not created.")
+    return
 ##################################################################
 def getJSON(filename):
     # Read the .mn/.JSON file
@@ -27,8 +89,8 @@ def getJSON(filename):
         return(None)
     return(data)
 ##################################################################
-def getTopology(): 
-    data=getJSON(filename=args.topology)
+def createTopology(topology): 
+    data=getJSON(filename=topology)
     #Nodes=
 ##################################################################
 def getDockerImages(): 
@@ -46,10 +108,16 @@ def kill_and_remove_container(cname):
     else:
         print(f"Container '{cname}' not found.")
 ##################################################################
+def execDocker(container_name, command):
+    client = docker.from_env()
+    container = client.containers.get(container_name)
+    exec_res = container.exec_run(command, tty=True)
+    return exec_res
+##################################################################
 def cleanup(): 
    client = docker.from_env()
    containers = client.containers.list()
-   matching_containers = [container.name for container in containers if container.name.startswith(prefix)]
+   matching_containers = [container.name for container in containers if container.name.startswith("mn_")]
    for cname in matching_containers:
         kill_and_remove_container(cname)
 ##################################################################
@@ -58,10 +126,12 @@ if __name__ == "__main__":
     parser.add_argument("topology", help="Topology file (i.e. .mn) generated from miniedit.")
     parser.add_argument("dockerMap", help="Docker mapping JSON for each nodes")
     args = parser.parse_args()
-    # args = argparse.Namespace(topology="minieditBaseline.mn",dockerMap="") ## Ipython stub
+    # args = argparse.Namespace(topology="minieditBaseline.mn",dockerMap=None) ## Ipython stub
     ##################################################################
-    data=getJSON(filename=args.topology)
-    Nodes=
+    #def createTopology(topology):
+    subprocess.run(["mkdir", "-p", "/var/run/netns/"])
+    data=getJSON(topology=args.topology)
+    createMiddleboxes(data)
 
 
 

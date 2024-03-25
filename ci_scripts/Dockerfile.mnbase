@@ -1,4 +1,4 @@
-#sudo docker build -t mnbase .
+#sudo docker build -t mnbase . -f Dockerfile.mnbase
 FROM ubuntu:latest
 
 # Install required tools
